@@ -35,7 +35,7 @@ Resources:
   Py3VendorBuild:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: vendor.build
+      Handler: lambdavendor.vend
       Runtime: python-3.6
       Role: !Ref VendorBuildRole
       Environment:
@@ -45,12 +45,13 @@ Resources:
         Build:
           Type: Api
           Properties:
-            Path: '/3/{package}'
+            Path: '/3/vend/{requirements}'
             Method: get
+            RestApiId: !Ref VendorAPI
   Py2VendorBuild:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: vendor.build
+      Handler: lambdavendor.vend
       Runtime: python-2.7
       Environment:
         Variables:
@@ -59,5 +60,43 @@ Resources:
         Build:
           Type: Api
           Properties:
-            Path: '/2/{package}'
+            Path: '/2/vend/{requirements}'
             Method: get
+            RestApiId: !Ref VendorAPI
+  VendorAPI:
+    Type: AWS::Serverless::API
+    Properties:
+      StageName: api
+      DefinitionBody:
+        swagger: '2.0'
+        info:
+          title: AWS Python Lambda Vendor
+          version: !Ref Version
+        paths:
+          '/3/vend/{package}':
+            get:
+              responses:
+                200:
+                  description: >
+                    Build package & dependency wheels for Python 3.
+                    Returns list of URLs to the package & dependency wheels.
+            parameters:
+              - name: requirements
+                in: path
+                required: true
+          '/2/vend/{package}':
+            get:
+              responses:
+                200:
+                  description: >
+                    Build package & dependency wheels for Python 2.
+                    Returns list of URLs to the package & dependency wheels.
+            parameters:
+              - name: requirements
+                in: path
+                required: true
+Outputs:
+  Version:
+    Value: '1.0'
+  ServiceURL:
+    Value: !Sub https://${VendorAPI}.execute-api.${AWS::Region}.amazonaws.com/api/
