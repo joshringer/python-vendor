@@ -1,11 +1,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Resources:
-  VendorBucket:
+  Packages:
     Type: AWS::S3::Bucket
     Properties:
       AccessControl: PublicRead
-  VendorBuildRole:
+  VendRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -24,46 +24,49 @@ Resources:
               -
                 Effect: Allow
                 Action: s3:ListBucket
-                Resource: !GetAtt VendorBucket.Arn
+                Resource: !GetAtt Packages.Arn
               -
                 Effect: Allow
                 Action:
                   - s3:GetObject
                   - s3:PutObject
-                Resource: !Join ['/', [!GetAtt VendorBucket.Arn, '*']]
-          PolicyName: VendorBucketAccess
-  Py3VendorBuild:
+                Resource: !Join [ '/', [ !GetAtt Packages.Arn, '*' ] ]
+          PolicyName: PackagesBucketAccess
+  Py3Vend:
     Type: AWS::Serverless::Function
     Properties:
       Handler: lambdavendor.vend
-      Runtime: python-3.6
-      Role: !Ref VendorBuildRole
+      Runtime: python3.6
+      CodeUri: ./lambdavendor.py
+      Role: !GetAtt VendRole.Arn
       Environment:
         Variables:
-          BUCKET: !Ref VendorBucket
+          BUCKET: !Ref Packages
       Events:
-        Build:
+        Vend:
           Type: Api
           Properties:
-            Path: '/3/vend/{requirements}'
+            Path: /3/vend/{requirements}
             Method: get
-            RestApiId: !Ref VendorAPI
-  Py2VendorBuild:
+            RestApiId: !Ref API
+  Py2Vend:
     Type: AWS::Serverless::Function
     Properties:
       Handler: lambdavendor.vend
-      Runtime: python-2.7
+      Runtime: python2.7
+      CodeUri: ./lambdavendor.py
+      Role: !GetAtt VendRole.Arn
       Environment:
         Variables:
-          BUCKET: !Ref VendorBucket
+          BUCKET: !Ref Packages
       Events:
-        Build:
+        Vend:
           Type: Api
           Properties:
-            Path: '/2/vend/{requirements}'
+            Path: /2/vend/{requirements}
             Method: get
-            RestApiId: !Ref VendorAPI
-  VendorAPI:
+            RestApiId: !Ref API
+  API:
     Type: AWS::Serverless::API
     Properties:
       StageName: api
@@ -71,32 +74,34 @@ Resources:
         swagger: '2.0'
         info:
           title: AWS Python Lambda Vendor
-          version: !Ref Version
+          version: '1.0'
         paths:
-          '/3/vend/{package}':
+          /3/vend/{requirements}:
             get:
               responses:
-                200:
-                  description: >
+                '200':
+                  description: >-
                     Build package & dependency wheels for Python 3.
-                    Returns list of URLs to the package & dependency wheels.
+                    Returns a list of URLs to the package & dependency wheels.
             parameters:
               - name: requirements
                 in: path
                 required: true
-          '/2/vend/{package}':
+                type: string
+          /2/vend/{requirements}:
             get:
               responses:
-                200:
-                  description: >
+                '200':
+                  description: >-
                     Build package & dependency wheels for Python 2.
-                    Returns list of URLs to the package & dependency wheels.
+                    Returns a list of URLs to the package & dependency wheels.
             parameters:
               - name: requirements
                 in: path
                 required: true
+                type: string
 Outputs:
   Version:
     Value: '1.0'
   ServiceURL:
-    Value: !Sub https://${VendorAPI}.execute-api.${AWS::Region}.amazonaws.com/api/
+    Value: !Sub https://${API}.execute-api.${AWS::Region}.amazonaws.com/api/
