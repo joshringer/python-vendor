@@ -14,14 +14,40 @@ import re
 import shutil
 import subprocess
 import tempfile
+import traceback
 
 import boto3
 
 
+BUCKET = os.environ['BUCKET']
+ERR_MSG = '''Something went wrong. Maybe the traceback will help?
+Please include it in any issue you raise.
+
+'''
+LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
+PROXY_PARAM_RE = re.compile(r'\{(?P<key>\w+)\+\}')
+
+
+logging.basicConfig(level=LOG_LEVEL)
+
 log = logging.getLogger(__name__)
 
-BUCKET = os.environ['BUCKET']
-PROXY_PARAM_RE = re.compile(r'\{(?P<key>\w+)\+\}')
+
+def apitrace(function):
+    """Report any excptions back to the caller."""
+    @functools.wraps(function)
+    def ensure(event, context):
+        try:
+            return function(event, context)
+        except Exception:
+            log.exception('Error executing %s', function)
+            return {
+                'statusCode': 500,
+                'headers': {'Content-Type': 'application/json'},
+                'body': json.dumps({'message': ERR_MSG + traceback.format_exc()}),
+            }
+
+    return ensure
 
 
 def apiproxy(function):
@@ -37,9 +63,11 @@ def apiproxy(function):
 
         if event['body']:
             kwargs.update(json.loads(event['body']))
+        if event['queryStringParameters']:
+            kwargs.update(event['queryStringParameters'])
+        if event['pathParameters']:
+            kwargs.update(event['pathParameters'])
 
-        kwargs.update(event['queryStringParameters'])
-        kwargs.update(event['pathParameters'])
         result = function(*args, **kwargs)
         response = {
             'statusCode': 200,
@@ -51,8 +79,9 @@ def apiproxy(function):
     return proxy
 
 
+@apitrace
 @apiproxy
-def lambda_vend(requirements, rebuild=False, minimal=False, bucketname=BUCKET):
+def vend(requirements, rebuild=False, minimal=False, bucketname=BUCKET):
     """Vend takes a package name and builds python wheels for it and its dependencies."""
     keys = clone_packages(requirements, bucketname, overwrite=rebuild)
     s3 = boto3.client('s3')
@@ -78,15 +107,18 @@ def lambda_vend(requirements, rebuild=False, minimal=False, bucketname=BUCKET):
 def clone_packages(requirements, bucketname, overwrite=False):
     """Download packages from pypi, then upload to S3 bucket."""
     rlist = requirements.split() if hasattr(requirements, 'split') else requirements
+    cdir = path.abspath('/tmp/pipcache')
+    os.makedirs(cdir, exist_ok=True)
     with tempdir() as wdir:
-        subprocess.check_call(['pip', 'download'] + rlist, cwd=wdir)
+        subprocess.check_call(['pip', 'download', '--cache-dir', cdir] + rlist, cwd=wdir)
         return upload_artifacts(wdir, bucketname)
 
 
 def build_wheel(srcpath, bucketname):
     """Build a wheel from provided source, then upload to S3 bucket."""
     # First, ensure build environment is set up.
-    tdir = path.abspath(os.getcwd())
+    tdir = path.abspath('/tmp/toolchain')
+    os.makedirs(tdir, exist_ok=True)
     subprocess.check_call(['yum', '--installroot', tdir, '-y', 'groupinstall', 'Developer tools'])
     newpath = '{tdir}/usr/local/bin:{tdir}/usr/bin:{tdir}/bin'.format(tdir=tdir)
     if 'PATH' in os.environ:
@@ -107,12 +139,8 @@ def upload_artifacts(dirpath, bucketname, overwrite=False):
     # TODO: Potentially run in parallel?
     for fname in os.listdir(dirpath):
         fpath = path.join(dirpath, fname)
-        try:
-            key = upload_artifact(fpath, bucketname, overwrite=overwrite)
-        except Exception:
-            log.warning('Failed to upload %s', fname, exc_info=True)
-        else:
-            keys.add(key)
+        key = upload_artifact(fpath, bucketname, overwrite=overwrite)
+        keys.add(key)
 
     return keys
 
@@ -170,7 +198,7 @@ class PackageInfo(object):
         for rgx in (cls.src_re, cls.whl_re):
             match = rgx.match(filename)
             if match:
-                return cls(match.groupdict())
+                return cls(**match.groupdict())
 
         raise ParseError('Unable to parse filename: ' + filename)
 
