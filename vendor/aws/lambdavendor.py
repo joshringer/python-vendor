@@ -101,7 +101,7 @@ def vend(requirements, rebuild=False, minimal=False, bucketname=BUCKET):
         elif not minimal:
             urls.append(baseurl + key)
 
-    return urls
+    return {'packages': urls}
 
 
 def clone_packages(requirements, bucketname, overwrite=False):
