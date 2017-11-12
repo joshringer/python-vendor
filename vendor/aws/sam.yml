@@ -48,8 +48,8 @@ Resources:
           Type: Api
           Properties:
             Path: /3/vend/{requirements}
-            Method: get
-            # RestApiId: !Ref API
+            Method: post
+            RestApiId: !Ref API
   Py2Vend:
     Type: AWS::Serverless::Function
     Properties:
@@ -66,84 +66,84 @@ Resources:
           Type: Api
           Properties:
             Path: /2/vend/{requirements}
-            Method: get
-            # RestApiId: !Ref API
-  # API:
-  #   Type: AWS::Serverless::API
-  #   Properties:
-  #     StageName: api
-  #     DefinitionBody:
-  #       swagger: '2.0'
-  #       info:
-  #         title: Vendor
-  #         version: '1.0'
-  #       schemes:
-  #         - "https"
-  #       paths:
-  #         /3/vend/{requirements}:
-  #           get:
-  #             consumes:
-  #               - application/json
-  #             produces:
-  #               - application/json
-  #             responses:
-  #               '200':
-  #                 description: >-
-  #                   Build package & dependency wheels for Python 3.
-  #                   Returns a list of URLs to the package & dependency wheels.
-  #                 schema:
-  #                   $ref: '#/definitions/packageList'
-  #             x-amazon-apigateway-integration:
-  #               responses:
-  #                 default:
-  #                   statusCode: '200'
-  #               uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${Py3Vend.Arn}/invocations
-  #               passthroughBehavior: when_no_match
-  #               httpMethod: POST
-  #               contentHandling: CONVERT_TO_TEXT
-  #               type: aws_proxy
-  #           parameters:
-  #             - name: requirements
-  #               in: path
-  #               required: true
-  #               type: string
-  #         /2/vend/{requirements}:
-  #           get:
-  #             consumes:
-  #               - application/json
-  #             produces:
-  #               - application/json
-  #             responses:
-  #               '200':
-  #                 description: >-
-  #                   Build package & dependency wheels for Python 2.
-  #                   Returns a list of URLs to the package & dependency wheels.
-  #                 schema:
-  #                   $ref: '#/definitions/packageList'
-  #             x-amazon-apigateway-integration:
-  #               responses:
-  #                 default:
-  #                   statusCode: '200'
-  #               uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${Py2Vend.Arn}/invocations
-  #               passthroughBehavior: when_no_match
-  #               httpMethod: POST
-  #               contentHandling: CONVERT_TO_TEXT
-  #               type: aws_proxy
-  #           parameters:
-  #             - name: requirements
-  #               in: path
-  #               required: true
-  #               type: string
-  #       definitions:
-  #         packageList:
-  #           type: object
-  #           properties:
-  #             packages:
-  #               type: list
-  #               items:
-  #                 type: string
+            Method: post
+            RestApiId: !Ref API
+  API:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: api
+      DefinitionBody:
+        swagger: '2.0'
+        info:
+          title: Vendor
+          version: '1.0'
+        schemes:
+          - "https"
+        paths:
+          /3/vend/{requirements}:
+            post:
+              consumes:
+                - application/json
+              produces:
+                - application/json
+              responses:
+                '200':
+                  description: >-
+                    Build package & dependency wheels for Python 3.
+                    Returns a list of URLs to the package & dependency wheels.
+                  schema:
+                    $ref: '#/definitions/packageList'
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: '200'
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${Py3Vend.Arn}/invocations
+                passthroughBehavior: when_no_match
+                httpMethod: POST
+                contentHandling: CONVERT_TO_TEXT
+                type: aws_proxy
+            parameters:
+              - name: requirements
+                in: path
+                required: true
+                type: string
+          /2/vend/{requirements}:
+            post:
+              consumes:
+                - application/json
+              produces:
+                - application/json
+              responses:
+                '200':
+                  description: >-
+                    Build package & dependency wheels for Python 2.
+                    Returns a list of URLs to the package & dependency wheels.
+                  schema:
+                    $ref: '#/definitions/packageList'
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: '200'
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${Py2Vend.Arn}/invocations
+                passthroughBehavior: when_no_match
+                httpMethod: POST
+                contentHandling: CONVERT_TO_TEXT
+                type: aws_proxy
+            parameters:
+              - name: requirements
+                in: path
+                required: true
+                type: string
+        definitions:
+          packageList:
+            type: object
+            properties:
+              packages:
+                type: list
+                items:
+                  type: string
 Outputs:
   Version:
     Value: '1.0'
-  # ServiceURL:
-  #   Value: !Sub https://${API}.execute-api.${AWS::Region}.amazonaws.com/api/
+  ServiceURL:
+    Value: !Sub https://${API}.execute-api.${AWS::Region}.amazonaws.com/api/
