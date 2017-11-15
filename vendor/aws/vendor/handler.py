@@ -12,7 +12,9 @@ import os
 from os import path
 import re
 import shutil
+import string
 import subprocess
+import sys
 import tempfile
 import traceback
 
@@ -30,7 +32,7 @@ PROXY_PARAM_RE = re.compile(r'\{(?P<key>\w+)\+\}')
 
 logging.basicConfig(level=LOG_LEVEL)
 
-log = logging.getLogger(__name__)
+log = logging.getLogger('vendor')
 
 
 def apitrace(function):
@@ -84,27 +86,38 @@ def apiproxy(function):
 def vend(requirements, rebuild=False, minimal=False, bucketname=BUCKET):
     """Vend takes a package name and builds python wheels for it and its dependencies."""
     keys = clone_packages(requirements, bucketname, overwrite=rebuild)
-    s3 = boto3.client('s3')
-    baseurl = 'https://{bucketname}.s3.amazonaws.com/'.format(bucketname=bucketname)
-    urls = []
     for key in keys:
         fname = key.rsplit('/', 1)[-1]
         # We assume successful parse as it happened in clone_packages already.
         pi = PackageInfo.parse(fname)
         if pi.is_src():
             # TODO: Check for wheel, only overwrite if rebuild==True.
-            with tempdir() as wdir:
-                dest = path.join(wdir, fname)
-                s3.download_file(bucketname, key, dest)
-                bkeys = build_wheel(dest, bucketname)
-                urls.extend(baseurl + k for k in bkeys)
-        elif not minimal:
-            urls.append(baseurl + key)
+            build_wheel(key, sys.version_info, bucketname=bucketname)
 
-    return {'packages': urls}
+    bucket_url = 'https://{bucketname}.s3.amazonaws.com/'.format(bucketname=bucketname)
+    message = 'Build under way. Once complete, $ pip install -i {bucket_url} {requirements} within a Lambda AMI will install using wheels.'
+    return {'message': message, 'bucket_url': bucket_url, 'artifacts': sorted(keys)}
 
 
-def clone_packages(requirements, bucketname, overwrite=False):
+def build_wheel(src_key, python_version, bucketname=BUCKET):
+    """Build a wheel from provided source, then upload to S3 bucket."""
+    fpath, fname = src_key.rsplit('/', 1)
+    env = {
+        'PYTHON_VERSION': '{v.major}{v.minor}'.format(v=python_version),
+        'S3_BASE': 's3://{}/{}'.format(bucketname, fpath),
+        'ARCHIVE_NAME': fname,
+    }
+    # Construct build script
+    tplfn = path.join(path.dirname(__file__), 'build.sh')
+    with open(tplfn, encoding='utf8') as tplfp:
+        tpl = string.Template(tplfp.read())
+
+    script = tpl.safe_substitute(env)
+    # TODO: Finish ec2 launch
+    print(script)
+
+
+def clone_packages(requirements, bucketname=BUCKET, overwrite=False):
     """Download packages from pypi, then upload to S3 bucket."""
     rlist = requirements.split() if hasattr(requirements, 'split') else requirements
     cdir = path.abspath('/tmp/pipcache')
@@ -114,26 +127,7 @@ def clone_packages(requirements, bucketname, overwrite=False):
         return upload_artifacts(wdir, bucketname)
 
 
-def build_wheel(srcpath, bucketname):
-    """Build a wheel from provided source, then upload to S3 bucket."""
-    # First, ensure build environment is set up.
-    tdir = path.abspath('/tmp/toolchain')
-    os.makedirs(tdir, exist_ok=True)
-    subprocess.check_call(['yum', '--installroot', tdir, '-y', 'groupinstall', 'Developer tools'])
-    newpath = '{tdir}/usr/local/bin:{tdir}/usr/bin:{tdir}/bin'.format(tdir=tdir)
-    if 'PATH' in os.environ:
-        os.environ['PATH'] = ':'.join([newpath, os.environ['PATH']])
-    else:
-        os.environ['PATH'] = newpath
-
-    subprocess.check_call(['pip', 'install', 'wheel'])
-    # Then build the wheel.
-    with tempdir() as wdir:
-        subprocess.check_call(['pip', 'wheel', srcpath], cwd=wdir)
-        return upload_artifacts(wdir, bucketname, overwrite=True)
-
-
-def upload_artifacts(dirpath, bucketname, overwrite=False):
+def upload_artifacts(dirpath, bucketname=BUCKET, overwrite=False):
     """Upload a directory of artifacts to S3 bucket."""
     keys = set()
     # TODO: Potentially run in parallel?
@@ -145,7 +139,7 @@ def upload_artifacts(dirpath, bucketname, overwrite=False):
     return keys
 
 
-def upload_artifact(filepath, bucketname, overwrite=False):
+def upload_artifact(filepath, bucketname=BUCKET, overwrite=False):
     """Upload a package artifact to S3 bucket."""
     filename = path.basename(filepath)
     key = '{pkg.distribution}/{filename}'.format(

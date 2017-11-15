@@ -1,10 +1,28 @@
 AWSTemplateFormatVersion: '2010-09-09'
+
 Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  BucketName:
+    Description: >
+      Friendly name for arctifact bucket.
+    Type: String
+    Default: ''
+  Version:
+    Description: >
+      Vendor application version.
+    Type: String
+    Default: '0.1'
+
+Conditions:
+  NoBucketName: !Equals [ !Ref BucketName, '' ]
+
 Resources:
   Packages:
     Type: AWS::S3::Bucket
     Properties:
       AccessControl: PublicRead
+      BucketName: !If [ NoBucketName, !Ref 'AWS::NoValue', !Ref BucketName ]
   VendRole:
     Type: AWS::IAM::Role
     Properties:
@@ -35,9 +53,9 @@ Resources:
   Py3Vend:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: lambdavendor.vend
+      Handler: handler.vend
       Runtime: python3.6
-      CodeUri: ./lambdavendor.py
+      CodeUri: vendor/
       Timeout: 300
       Role: !GetAtt VendRole.Arn
       Environment:
@@ -53,9 +71,9 @@ Resources:
   Py2Vend:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: lambdavendor.vend
+      Handler: handler.vend
       Runtime: python2.7
-      CodeUri: ./lambdavendor.py
+      CodeUri: vendor/
       Timeout: 300
       Role: !GetAtt VendRole.Arn
       Environment:
@@ -76,7 +94,7 @@ Resources:
         swagger: '2.0'
         info:
           title: Vendor
-          version: '1.0'
+          version: !Ref Version
         schemes:
           - "https"
         paths:
@@ -142,8 +160,9 @@ Resources:
                 type: list
                 items:
                   type: string
+
 Outputs:
   Version:
-    Value: '1.0'
+    Value: !Ref Version
   ServiceURL:
     Value: !Sub https://${API}.execute-api.${AWS::Region}.amazonaws.com/api/
