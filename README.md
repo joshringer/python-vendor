@@ -10,8 +10,7 @@ packages, ready for use in your own Lambda functions.
 
 Because Lambda runs on a readonly filesystem, we must package up any build
 tools required for compilation. Roughly speaking, this equates for now to the
-"Development tools" group in amazon's yum repository, and also the relevant
-python-devel package for Python headers.
+relevant python-devel package for Python headers.
 
 The following process is the current method for gathering these build tools:
 
@@ -19,18 +18,33 @@ The following process is the current method for gathering these build tools:
    in the documentation here:
    http://docs.aws.amazon.com/lambda/latest/dg/current-supported-versions.html
 
-2. Run `yum` with the --installroot option to install the rpm into a separate
-   directory.  
-   Eg. `sudo yum -y --installroot=$(pwd) groupinstall "Development tools"`
+2. Run `yum` with the --downloadonly option to fetch the rpm archives into a
+   separate directory.  
+   ```
+   mkdir rpms
+   sudo yum -y --downloadonly --downloaddir="$(pwd)/rpms" install gcc python27-devel python36-devel
+   ```
+   You may get many for one request as it will also fetch dependencies.
 
-3. Download that directory to the relevant directory in this repository.
+3. Run the `rpm2cpio` and `cpio` as following to extract the artifacts from the
+   rpm archives.  
+   ```
+   mkdir toolchain && cd toolchain
+   for r in ../rpms/*.rpm; do rpm2cpio "$r" | cpio -idm; done
+   ```
 
-This process generates way more than we need, as it includes all dependencies
-all the way down to the base system(!). This will need to be improved, as
-space limitations are also a concern for Lambda (see
-http://docs.aws.amazon.com/lambda/latest/dg/limits.html). A yum download and
-rpm install using prefix doesn't do it for us, because the development tools
-are not relocatable packages it seems.
+4. Because the rpms have only been unpacked install scripts are not run, so you
+   must manually add a few missing pieces such as general softlinks for a
+   number of the binaries.
+   ```
+   ln -s gcc48 usr/bin/gcc
+   ```
+
+5. You may at this point want to test the setup. Add the relevant directories
+   to your path, and try a pip build.
+
+6. Once comfortable, download that directory to vendor/aws/vendor in this
+   repository.
 
 In order to support more packages, which may include other dependencies, we may
 want to also include some common ones for building, eg. numpy. At some point it
