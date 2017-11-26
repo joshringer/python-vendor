@@ -11,4 +11,5 @@ name = "pypi"
 
 [dev-packages]
 
+botocore = "*"
 "boto3" = "*"

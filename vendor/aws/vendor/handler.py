@@ -18,15 +18,22 @@ import sys
 import tempfile
 import traceback
 
+from botocore.exceptions import ClientError
 import boto3
 
 
+# Required config
 BUCKET = os.environ['BUCKET']
+BUILD_PROXY_AMI = os.environ['BUILD_PROXY_AMI']
+BUILD_PROXY_PROFILE = os.environ['BUILD_PROXY_PROFILE']
+# Optional config
+LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
+
+# Constants
 ERR_MSG = '''Something went wrong. Maybe the traceback will help?
 Please include it in any issue you raise.
 
 '''
-LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
 PROXY_PARAM_RE = re.compile(r'\{(?P<key>\w+)\+\}')
 
 
@@ -114,7 +121,19 @@ def build_wheel(src_key, python_version, bucketname=BUCKET):
 
     script = tpl.safe_substitute(env)
     # TODO: Finish ec2 launch
-    print(script)
+    launch_params = {
+        'ImageId': BUILD_PROXY_AMI,
+        'InstanceType': 't2.micro',  # Free tier default
+        'MaxCount': 1,
+        'MinCount': 1,
+        'UserData': script,
+        'IamInstanceProfile': {
+            'Name': BUILD_PROXY_PROFILE,
+        },
+        'InstanceInitiatedShutdownBehavior': 'terminate',
+    }
+    ec2 = boto3.resource('ec2')
+    ec2.create_instances(**launch_params)
 
 
 def clone_packages(requirements, bucketname=BUCKET, overwrite=False):
@@ -153,7 +172,7 @@ def upload_artifact(filepath, bucketname=BUCKET, overwrite=False):
     else:
         try:
             obj.load()
-        except:  # ...what exception?
+        except ClientError:
             obj.upload_file(filepath)
 
     return key

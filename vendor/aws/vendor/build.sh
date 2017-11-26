@@ -10,11 +10,11 @@ echo "ARCHIVE_NAME=$ARCHIVE_NAME"
 ### Definitions ###
 function terminate {
   echo 'Terminating' >&2
-  shutdown -h
+  shutdown -h now
 }
 trap terminate EXIT
 
-pipcmd="pip$PYTHON_VERSION"
+pipcmd="python$PYTHON_VERSION -m pip"
 wheeldir="wheels"
 
 
@@ -23,7 +23,7 @@ yum -y groupinstall "Development tools"
 yum -y install "python${PYTHON_VERSION}-devel"
 if [ -n "$EXTRAS" ]
 then
-  yum -y install "$EXTRAS"
+  yum -y install $EXTRAS
 fi
 $pipcmd install wheel
 
@@ -34,7 +34,7 @@ aws s3 cp "$S3_BASE/$ARCHIVE_NAME" .
 
 ### Perform build ###
 mkdir "$wheeldir"
-$pipcmd wheel -d "$wheeldir" "$ARCHIVE_NAME"
+$pipcmd wheel -w "$wheeldir" "$ARCHIVE_NAME"
 
 
 ### Upload wheels ###
