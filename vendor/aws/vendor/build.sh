@@ -1,10 +1,12 @@
 #!/bin/bash
 
+echo "=============================== BEGIN ===============================" >&2
+
 ### Variables ###
-echo "PYTHON_VERSION=$PYTHON_VERSION"
-echo "EXTRAS=$EXTRAS"
-echo "S3_BASE=$S3_BASE"
-echo "ARCHIVE_NAME=$ARCHIVE_NAME"
+echo "PYTHON_VERSION=$PYTHON_VERSION" >&2
+echo "EXTRAS=$EXTRAS" >&2
+echo "S3_BASE=$S3_BASE" >&2
+echo "ARCHIVE_NAME=$ARCHIVE_NAME" >&2
 
 
 ### Definitions ###
@@ -40,3 +42,5 @@ $pipcmd wheel -w "$wheeldir" "$ARCHIVE_NAME"
 ### Upload wheels ###
 cd "$wheeldir"
 aws s3 cp --recursive . "$S3_BASE"
+
+echo "================================ END ================================" >&2
