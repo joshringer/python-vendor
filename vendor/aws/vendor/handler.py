@@ -30,7 +30,8 @@ BUILD_PROXY_PROFILE = os.environ['BUILD_PROXY_PROFILE']
 LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
 
 # Constants
-ERR_MSG = '''Something went wrong. Maybe the traceback will help?
+BUILD_STARTED_MSG = 'Build under way. Once complete, download wheels from {bucket_url}.'
+SERVER_ERROR_MSG = '''Something went wrong. Maybe the traceback will help?
 Please include it in any issue you raise.
 
 '''
@@ -42,21 +43,21 @@ logging.basicConfig(level=LOG_LEVEL)
 log = logging.getLogger('vendor')
 
 
-def apitrace(function):
-    """Report any excptions back to the caller."""
-    @functools.wraps(function)
-    def ensure(event, context):
-        try:
-            return function(event, context)
-        except Exception:
-            log.exception('Error executing %s', function)
-            return {
-                'statusCode': 500,
-                'headers': {'Content-Type': 'application/json'},
-                'body': json.dumps({'message': ERR_MSG + traceback.format_exc()}),
-            }
+class APIError(Exception):
+    """APIError signals an error response for apiproxy()."""
 
-    return ensure
+    def __init__(self, status_code, message):
+        self.status_code = status_code
+        self.message = message
+        super(APIError, self).__init__(status_code, message)
+
+
+def _api_response(code, obj):
+    return {
+        'statusCode': code,
+        'headers': {'Content-Type': 'application/json'},
+        'body': json.dumps(obj),
+    }
 
 
 def apiproxy(function):
@@ -77,18 +78,19 @@ def apiproxy(function):
         if event['pathParameters']:
             kwargs.update(event['pathParameters'])
 
-        result = function(*args, **kwargs)
-        response = {
-            'statusCode': 200,
-            'headers': {'Content-Type': 'application/json'},
-            'body': json.dumps(result),
-        }
-        return response
+        try:
+            result = function(*args, **kwargs)
+        except APIError as err:
+            return _api_response(err.status_code, {'message': err.message})
+        except Exception:
+            log.exception('Error executing %s', function)
+            return _api_response(500, {'message': SERVER_ERROR_MSG + traceback.format_exc()})
+
+        return _api_response(200, result)
 
     return proxy
 
 
-@apitrace
 @apiproxy
 def vend(requirements, rebuild=False, minimal=False, bucketname=BUCKET):
     """Vend takes a package name and builds python wheels for it and its dependencies."""
@@ -102,8 +104,11 @@ def vend(requirements, rebuild=False, minimal=False, bucketname=BUCKET):
             build_wheel(key, sys.version_info, bucketname=bucketname)
 
     bucket_url = 'https://{bucketname}.s3.amazonaws.com/'.format(bucketname=bucketname)
-    message = 'Build under way. Once complete, $ pip install -i {bucket_url} {requirements} within a Lambda AMI will install using wheels.'
-    return {'message': message, 'bucket_url': bucket_url, 'artifacts': sorted(keys)}
+    return {
+        'message': BUILD_STARTED_MSG.format(bucket_url=bucket_url),
+        'bucket_url': bucket_url,
+        'artifacts': sorted(keys),
+    }
 
 
 def build_wheel(src_key, python_version, bucketname=BUCKET):
@@ -120,7 +125,7 @@ def build_wheel(src_key, python_version, bucketname=BUCKET):
         tpl = string.Template(tplfp.read())
 
     script = tpl.safe_substitute(env)
-    # TODO: Finish ec2 launch
+    # Launch EC2 instance to perform the build in
     launch_params = {
         'ImageId': BUILD_PROXY_AMI,
         'InstanceType': 't2.micro',  # Free tier default
@@ -140,7 +145,11 @@ def clone_packages(requirements, bucketname=BUCKET, overwrite=False):
     """Download packages from pypi, then upload to S3 bucket."""
     rlist = requirements.split() if hasattr(requirements, 'split') else requirements
     cdir = path.abspath('/tmp/pipcache')
-    os.makedirs(cdir, exist_ok=True)
+    try:  # exist_ok=True not available in Python 2.7
+        os.makedirs(cdir)
+    except OSError:
+        pass
+
     with tempdir() as wdir:
         subprocess.check_call(['pip', 'download', '--cache-dir', cdir] + rlist, cwd=wdir)
         return upload_artifacts(wdir, bucketname)
