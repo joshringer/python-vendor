@@ -12,7 +12,7 @@ Parameters:
     Description: >
       Vendor application version.
     Type: String
-    Default: '0.1'
+    Default: '0'
 
 Mappings:
   BuildProxy:
