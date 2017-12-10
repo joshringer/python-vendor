@@ -4,8 +4,9 @@ Parameters:
   Version:
     Description: >
       Vendor application version.
+      DO NOT SET. This is used internally to determine template changes.
     Type: String
-    Default: '0'
+    Default: '1.0'
 
 Resources:
   Bucket:

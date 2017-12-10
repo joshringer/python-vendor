@@ -4,6 +4,8 @@ Vendor AWS Serverless Application.
 This AWS Lambda function builds python wheels inside the lambda environment.
 These wheels can then be extracted for use in your own lambda functions.
 """
+__version__ = '0.1'
+
 import contextlib
 import functools
 import json
@@ -94,6 +96,12 @@ def apiproxy(function):
         return _api_response(200, result)
 
     return proxy
+
+
+@apiproxy
+def version():
+    """Report the current API version."""
+    return {'version': __version__}
 
 
 @apiproxy

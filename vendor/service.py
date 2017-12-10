@@ -11,8 +11,6 @@ import boto3
 from packaging import version
 import six
 
-from .__about__ import __version__
-
 
 DEFAULT_DEPLOYMENT_STACK_NAME = 'Vendor-deployment'
 DEFAULT_SERVICE_STACK_NAME = 'Vendor'
@@ -67,17 +65,17 @@ def run_cloudformation_command(command, **options):
     return subprocess.check_call(pargs)
 
 
-def get_deployment_filepath(filename):
+def get_deployment_filepath(*filename):
     """Return location of filename within deployment code."""
-    return os.path.join(os.path.dirname(__file__), 'aws', filename)
+    return os.path.join(os.path.dirname(__file__), 'aws', *filename)
 
 
 class VendorService(object):
     """The Vendor service."""
 
-    version = version.Version(__version__)
     deployment_template = get_deployment_filepath('vendor-deployment.yml')
     service_template = get_deployment_filepath('vendor.yml')
+    service_index = get_deployment_filepath('vendor', 'handler.py')
 
     def __init__(self, cloudformation_client=None):
         """Create new instance of Vendor service."""
@@ -118,7 +116,7 @@ class VendorService(object):
         self._describe_cache[stack_name] = stacks[0]
         return stacks[0]
 
-    def check_stack(self, stack_name):
+    def check_stack(self, stack_name, stack_version):
         """Check status of stack."""
         description = self.describe_stack(stack_name)
         # TODO: Check stack deployment status
@@ -126,36 +124,56 @@ class VendorService(object):
         outputs = parse_stack_outputs(description)
         sv = version.parse(outputs['Version'])
         log.debug('Stack version: %s', sv)
-        if sv < self.version:
+        if sv < stack_version:
             raise StackOutdated(stack_name)
-        elif sv > self.version:
-            raise ValueError('Package outdated, please upgrade to at least {}.'.format(sv))
 
         return description
 
+    def _get_deployment_version(self):
+        with open(self.deployment_template) as fp:
+            response = self.client.validate_template(TemplateBody=fp.read())
+
+        log.debug('Extracting deployment version from %r', response)
+        for parameter in response['Parameters']:
+            if parameter['ParameterKey'] == 'Version':
+                return version.Version(parameter['DefaultValue'])
+
+        # Unexpected
+        raise Exception('Deployment template is missing a Version parameter')
+
     def deployment(self, stack_name=DEFAULT_DEPLOYMENT_STACK_NAME):
         """Return Deployment stack information, creating/updating it if necessary."""
+        stack_version = self._get_deployment_version()
         try:
-            description = self.check_stack(stack_name)
+            description = self.check_stack(stack_name, stack_version)
         except StackException as exc:
             log.info('%s, deploying', exc)
             run_cloudformation_command(
                 'deploy',
                 stack_name=stack_name,
                 template_file=self.deployment_template,
-                parameter_overrides='Version={}'.format(self.version),
             )
-            description = self.check_stack(stack_name)
+            description = self.check_stack(stack_name, stack_version)
 
         return parse_stack_outputs(description)
+
+    def _get_service_version(self):
+        with open(self.service_index) as fp:
+            for line in fp:
+                if line.startswith('__version__ = '):
+                    return version.Version(eval(line[14:]))
+
+        # Unexpected
+        raise Exception('Service code is missing a __version__ declaration')
 
     def service(self, stack_name=DEFAULT_SERVICE_STACK_NAME, bucket_name=None, deployment_bucket_name=None):
         """Return service stack information, creating/updating as necessary."""
         if deployment_bucket_name is None:
             deployment_bucket_name = self.deployment()['BucketName']
 
+        stack_version = self._get_service_version()
         try:
-            description = self.check_stack(stack_name)
+            description = self.check_stack(stack_name, stack_version)
         except StackException as exc:
             log.info('%s, deploying', exc)
             tdir = tempfile.mkdtemp(prefix='vendor-')
@@ -172,7 +190,7 @@ class VendorService(object):
                 )
                 # ...and deploy.
                 parameters = [
-                    'Version={}'.format(self.version),
+                    'Version={}'.format(stack_version),
                 ]
                 if bucket_name:
                     parameters.append('BucketName={}'.format(bucket_name))
@@ -187,7 +205,7 @@ class VendorService(object):
             finally:
                 shutil.rmtree(tdir)
 
-            description = self.check_stack(stack_name)
+            description = self.check_stack(stack_name, stack_version)
 
         return parse_stack_outputs(description)
 
