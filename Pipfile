@@ -7,9 +7,11 @@ name = "pypi"
 
 [packages]
 
+"boto3" = "*"
+packaging = "*"
+six = "*"
+requests = "*"
 
 
 [dev-packages]
 
-botocore = "*"
-"boto3" = "*"
