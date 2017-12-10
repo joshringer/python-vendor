@@ -1,10 +1,38 @@
 # Python Vendor
 
-This package provides an AWS Serverless API for building compiled Python
-packages, ready for use in your own Lambda functions.
+This package provides an AWS service API for building compiled Python packages,
+ready for use in your own AWS Lambda functions.
+
+## Requirements
+
+In addition to Python package requirements that will automatically be dealt
+with during package installation, the vendor package assumes that the AWS CLI
+is installed and configured on your system. By default, vendor makes use of
+your AWS configuration as the `aws` command would.
+
+To install awscli, please refer to the official documentation:  
+https://docs.aws.amazon.com/cli/latest/userguide/
 
 
 ## Installation
+
+### Programmatic Deployment
+
+The service package module provides a class for dealing with the Vendor stack
+deployment. To create the stack using the default settings, simply do the
+following:
+```
+>>> from vendor.service import VendorService
+>>> vs = VendorService()
+>>> vs.service()
+{'ServiceURL': 'https://abcde01234.execute-api.region.amazonaws.com/api/',
+ 'Version': '0.1'}
+```
+If all goes well, you will get back a dictionary containing the service
+`Version` and the `ServiceURL`, which can be used to call your newly created
+API. If the stacks already exist and are up-to-date, then the function will
+simply return the information, rather than recreate it all over again.
+
 
 ### Manual Deployment
 
