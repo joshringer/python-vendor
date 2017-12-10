@@ -1,2 +1,8 @@
-
+# Python binary files
 __pycache__/
+*.py[cdo]
+
+# Build artifacts
+build/
+dist/
+*.egg-info/

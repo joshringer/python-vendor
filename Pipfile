@@ -9,9 +9,11 @@ name = "pypi"
 
 "boto3" = "*"
 packaging = "*"
-six = "*"
 requests = "*"
+six = "*"
 
 
 [dev-packages]
 
+wheel = "*"
+twine = "*"
