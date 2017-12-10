@@ -26,8 +26,8 @@ Programmatic Deployment
 
 The service package module provides a class for dealing with the Vendor stack
 deployment. To create the stack using the default settings, simply do the
-following:
-::
+following::
+
   >>> from vendor.service import VendorService
   >>> vs = VendorService()
   >>> vs.service()
@@ -44,22 +44,22 @@ Manual Deployment
 -----------------
 
 First, deploy the Vendor-deployment stack to prepare a bucket for Serverless
-artifacts.
-::
+artifacts::
+
   aws cloudformation deploy --stack-name Vendor-deployment --template-file vendor/aws/vendor-deployment.yml
 
-The deployment bucket name can be found from the stack outputs.
-::
+The deployment bucket name can be found from the stack outputs::
+
   aws cloudformation describe-stacks --stack-name Vendor-deployment
 
 
-Next we can package and deploy the Vendor service.
-::
+Next we can package and deploy the Vendor service::
+
   aws cloudformation package --template-file vendor/aws/vendor.yml --s3-bucket {Vendor-deployment.BucketName} --output-template-file /tmp/vendorpk.yml
   aws cloudformation deploy --stack-name Vendor --template-file /tmp/vendorpk.yml --capabilities CAPABILITY_IAM
 
-Again, the service URL can be found from the stack outputs.
-::
+Again, the service URL can be found from the stack outputs::
+
   aws cloudformation describe-stacks --stack-name Vendor
 
 
