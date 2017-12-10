@@ -9,7 +9,7 @@ import functools
 import json
 import logging
 import os
-from os import path
+import os.path
 import re
 import shutil
 import string
@@ -18,7 +18,6 @@ import sys
 import tempfile
 import traceback
 
-from botocore.exceptions import ClientError
 import boto3
 
 
@@ -47,6 +46,12 @@ class APIError(Exception):
     """APIError signals an error response for apiproxy()."""
 
     def __init__(self, status_code, message):
+        """
+        Create new API Error instance.
+
+        :param int status_code: HTTP Error Code
+        :param str message: Error message
+        """
         self.status_code = status_code
         self.message = message
         super(APIError, self).__init__(status_code, message)
@@ -120,7 +125,7 @@ def build_wheel(src_key, python_version, bucketname=BUCKET):
         'ARCHIVE_NAME': fname,
     }
     # Construct build script
-    tplfn = path.join(path.dirname(__file__), 'build.sh')
+    tplfn = os.path.join(os.path.dirname(__file__), 'build.sh')
     with open(tplfn, encoding='utf8') as tplfp:
         tpl = string.Template(tplfp.read())
 
@@ -144,7 +149,7 @@ def build_wheel(src_key, python_version, bucketname=BUCKET):
 def clone_packages(requirements, bucketname=BUCKET, overwrite=False):
     """Download packages from pypi, then upload to S3 bucket."""
     rlist = requirements.split() if hasattr(requirements, 'split') else requirements
-    cdir = path.abspath('/tmp/pipcache')
+    cdir = os.path.abspath('/tmp/pipcache')
     try:  # exist_ok=True not available in Python 2.7
         os.makedirs(cdir)
     except OSError:
@@ -160,7 +165,7 @@ def upload_artifacts(dirpath, bucketname=BUCKET, overwrite=False):
     keys = set()
     # TODO: Potentially run in parallel?
     for fname in os.listdir(dirpath):
-        fpath = path.join(dirpath, fname)
+        fpath = os.path.join(dirpath, fname)
         key = upload_artifact(fpath, bucketname, overwrite=overwrite)
         keys.add(key)
 
@@ -169,7 +174,7 @@ def upload_artifacts(dirpath, bucketname=BUCKET, overwrite=False):
 
 def upload_artifact(filepath, bucketname=BUCKET, overwrite=False):
     """Upload a package artifact to S3 bucket."""
-    filename = path.basename(filepath)
+    filename = os.path.basename(filepath)
     key = '{pkg.distribution}/{filename}'.format(
         pkg=PackageInfo.parse(filename),
         filename=filename,
@@ -181,7 +186,7 @@ def upload_artifact(filepath, bucketname=BUCKET, overwrite=False):
     else:
         try:
             obj.load()
-        except ClientError:
+        except s3.meta.client.exceptions.ClientError:
             obj.upload_file(filepath)
 
     return key
@@ -206,6 +211,7 @@ class PackageInfo(object):
     )
 
     def __init__(self, distribution, version, ext, build='', python='', abi='none', platform='any'):
+        """Create new PackageInfo object."""
         self.distribution = distribution
         self.version = version
         self.build_tag = build
@@ -225,9 +231,11 @@ class PackageInfo(object):
         raise ParseError('Unable to parse filename: ' + filename)
 
     def is_src(self):
+        """Test if this package is source code."""
         return self.ext != '.whl'
 
     def is_whl(self):
+        """Test if this package is a wheel."""
         return self.ext == '.whl'
 
 

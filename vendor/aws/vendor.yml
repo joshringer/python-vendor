@@ -5,7 +5,7 @@ Transform: AWS::Serverless-2016-10-31
 Parameters:
   BucketName:
     Description: >
-      Friendly name for arctifact bucket.
+      Friendly name for artifact bucket.
     Type: String
     Default: ''
   Version:
