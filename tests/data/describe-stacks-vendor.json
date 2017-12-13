@@ -1,0 +1,40 @@
+{
+    "Stacks": [
+        {
+            "StackId": "arn:aws:cloudformation:region:account_id:stack/Vendor/stack_id",
+            "StackName": "Vendor",
+            "ChangeSetId": "arn:aws:cloudformation:region:account_id:changeSet/awscli-cloudformation-package-deploy-1234567890/guid",
+            "Parameters": [
+                {
+                    "ParameterKey": "BucketName",
+                    "ParameterValue": ""
+                },
+                {
+                    "ParameterKey": "Version",
+                    "ParameterValue": "0.1"
+                }
+            ],
+            "CreationTime": "2017-12-10T11:28:50.041Z",
+            "LastUpdatedTime": "2017-12-10T11:29:00.680Z",
+            "RollbackConfiguration": {},
+            "StackStatus": "CREATE_COMPLETE",
+            "DisableRollback": false,
+            "NotificationARNs": [],
+            "Capabilities": [
+                "CAPABILITY_IAM"
+            ],
+            "Outputs": [
+                {
+                    "OutputKey": "Version",
+                    "OutputValue": "0.1"
+                },
+                {
+                    "OutputKey": "ServiceURL",
+                    "OutputValue": "https://abcdef1234.execute-api.region.amazonaws.com/api/"
+                }
+            ],
+            "Tags": [],
+            "EnableTerminationProtection": false
+        }
+    ]
+}

@@ -1,0 +1,33 @@
+{
+    "Stacks": [
+        {
+            "StackId": "arn:aws:cloudformation:region:account_id:stack/Vendor-deployment/guid",
+            "StackName": "Vendor-deployment",
+            "ChangeSetId": "arn:aws:cloudformation:region:account_id:changeSet/awscli-cloudformation-package-deploy-1234567890/guid",
+            "Parameters": [
+                {
+                    "ParameterKey": "Version",
+                    "ParameterValue": "1.0"
+                }
+            ],
+            "CreationTime": "2017-12-10T11:24:03.683Z",
+            "LastUpdatedTime": "2017-12-10T11:24:09.244Z",
+            "RollbackConfiguration": {},
+            "StackStatus": "CREATE_COMPLETE",
+            "DisableRollback": false,
+            "NotificationARNs": [],
+            "Outputs": [
+                {
+                    "OutputKey": "BucketName",
+                    "OutputValue": "vendor-deployment-bucket-abcdef1234567"
+                },
+                {
+                    "OutputKey": "Version",
+                    "OutputValue": "1.0"
+                }
+            ],
+            "Tags": [],
+            "EnableTerminationProtection": false
+        }
+    ]
+}
