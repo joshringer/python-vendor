@@ -153,6 +153,7 @@ class VendorService(object):
                 stack_name=stack_name,
                 template_file=self.deployment_template,
             )
+            self._describe_cache.pop(stack_name, None)
             description = self.check_stack(stack_name, stack_version)
 
         return parse_stack_outputs(description)
@@ -202,6 +203,7 @@ class VendorService(object):
                     parameter_overrides=parameters,
                     capabilities='CAPABILITY_IAM',
                 )
+                self._describe_cache.pop(stack_name, None)
             finally:
                 shutil.rmtree(tdir)
 
