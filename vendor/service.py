@@ -116,16 +116,17 @@ class VendorService(object):
         self._describe_cache[stack_name] = stacks[0]
         return stacks[0]
 
-    def check_stack(self, stack_name, stack_version):
+    def check_stack(self, stack_name, stack_version=None):
         """Check status of stack."""
         description = self.describe_stack(stack_name)
         # TODO: Check stack deployment status
         # Check version.
-        outputs = parse_stack_outputs(description)
-        sv = version.parse(outputs['Version'])
-        log.debug('Stack version: %s', sv)
-        if sv < stack_version:
-            raise StackOutdated(stack_name)
+        if stack_version:
+            outputs = parse_stack_outputs(description)
+            sv = version.parse(outputs['Version'])
+            log.debug('Stack version: %s', sv)
+            if sv < stack_version:
+                raise StackOutdated(stack_name)
 
         return description
 
