@@ -131,10 +131,10 @@ Resources:
                 Action: iam:PassRole
                 Resource: !GetAtt BuildProxyRole.Arn
           PolicyName: BuildProxyLaunchAccess
-  Py3Vend:
+  Py3Handler:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: handler.vend
+      Handler: handler.dispatch
       Runtime: python3.6
       CodeUri: vendor/
       Timeout: 300
@@ -151,10 +151,16 @@ Resources:
             Path: /3/vend/{requirements}
             Method: post
             RestApiId: !Ref API
-  Py2Vend:
+        Version:
+          Type: Api
+          Properties:
+            Path: /version
+            Method: get
+            RestApiId: !Ref API
+  Py2Handler:
     Type: AWS::Serverless::Function
     Properties:
-      Handler: handler.vend
+      Handler: handler.dispatch
       Runtime: python2.7
       CodeUri: vendor/
       Timeout: 300
@@ -183,8 +189,31 @@ Resources:
         schemes:
           - "https"
         paths:
+          /version:
+            get:
+              summary: Get the service version.
+              produces:
+                - application/json
+              responses:
+                '200':
+                  description: Returns the service version.
+                  schema:
+                    type: object
+                    properties:
+                      version:
+                        type: string
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: '200'
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${Py3Handler.Arn}/invocations
+                passthroughBehavior: when_no_match
+                httpMethod: POST
+                contentHandling: CONVERT_TO_TEXT
+                type: aws_proxy
           /3/vend/{requirements}:
             post:
+              summary: Build package & dependency wheels for Python 3.
               consumes:
                 - application/json
               produces:
@@ -192,15 +221,13 @@ Resources:
               responses:
                 '200':
                   description: >-
-                    Build package & dependency wheels for Python 3.
-                    Returns a list of URLs to the package & dependency wheels.
-                  schema:
-                    $ref: '#/definitions/packageList'
+                    Returns a bucket URL and a list of the package & dependency
+                    requirements.
               x-amazon-apigateway-integration:
                 responses:
                   default:
                     statusCode: '200'
-                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${Py3Vend.Arn}/invocations
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${Py3Handler.Arn}/invocations
                 passthroughBehavior: when_no_match
                 httpMethod: POST
                 contentHandling: CONVERT_TO_TEXT
@@ -212,6 +239,7 @@ Resources:
                 type: string
           /2/vend/{requirements}:
             post:
+              summary: Build package & dependency wheels for Python 2.
               consumes:
                 - application/json
               produces:
@@ -219,15 +247,13 @@ Resources:
               responses:
                 '200':
                   description: >-
-                    Build package & dependency wheels for Python 2.
-                    Returns a list of URLs to the package & dependency wheels.
-                  schema:
-                    $ref: '#/definitions/packageList'
+                    Returns a bucket URL and a list of the package & dependency
+                    requirements.
               x-amazon-apigateway-integration:
                 responses:
                   default:
                     statusCode: '200'
-                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${Py2Vend.Arn}/invocations
+                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${Py2Handler.Arn}/invocations
                 passthroughBehavior: when_no_match
                 httpMethod: POST
                 contentHandling: CONVERT_TO_TEXT
@@ -237,14 +263,6 @@ Resources:
                 in: path
                 required: true
                 type: string
-        definitions:
-          packageList:
-            type: object
-            properties:
-              packages:
-                type: list
-                items:
-                  type: string
 
 Outputs:
   Version:

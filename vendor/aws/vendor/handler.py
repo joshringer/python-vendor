@@ -4,7 +4,7 @@ Vendor AWS Serverless Application.
 This AWS Lambda function builds python wheels inside the lambda environment.
 These wheels can then be extracted for use in your own lambda functions.
 """
-__version__ = '0.1'
+__version__ = '0.2.dev1'
 
 import contextlib
 import functools
@@ -32,6 +32,7 @@ LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
 
 # Constants
 BUILD_STARTED_MSG = 'Build under way. Once complete, download wheels from {bucket_url}.'
+NOT_FOUND_MSG = 'Route not found.'
 SERVER_ERROR_MSG = '''Something went wrong. Maybe the traceback will help?
 Please include it in any issue you raise.
 
@@ -59,18 +60,58 @@ class APIError(Exception):
         super(APIError, self).__init__(status_code, message)
 
 
-def _api_response(code, obj):
-    return {
-        'statusCode': code,
-        'headers': {'Content-Type': 'application/json'},
-        'body': json.dumps(obj),
-    }
-
-
-def apiproxy(function):
+class apiproxy(object):
     """Make API Gateway Lambda Proxy Integration even friendlier."""
-    @functools.wraps(function)
-    def proxy(event, context):
+
+    routes = {}
+
+    @classmethod
+    def dispatch(cls, event, context):
+        """Call route according to event/context."""
+        resource = event['resource']
+        # Reverse sort means deeper routes come first
+        for route in reversed(sorted(apiproxy.routes)):
+            if resource.startswith(route):
+                proxy = apiproxy.routes[route]
+                break
+
+        else:
+            return cls._api_response(404, {'message': NOT_FOUND_MSG, 'resource': resource})
+
+        return proxy(event, context)
+
+    @classmethod
+    def route(cls, *routes):
+        """
+        Register a function to be called for routes.
+
+        This method can be used as a function decorator.
+        """
+        return functools.partial(cls, routes=routes)
+
+    def __init__(self, function, routes):
+        """
+        Create new apiproxy routes.
+
+        :param function function: The function called by the routes
+        :param list[str] routes: The routes for which to call the function
+
+        The function registered may have any JSON-serialisable arguments.
+        Positional arguments should be listed as path paramters in the routes.
+        The function should return a JSON-serialisable object.
+        """
+        self.function = function
+        apiproxy.routes.update((r, self) for r in routes)
+
+    def __call__(self, event, context):
+        """
+        Run incoming APIGateway proxy event through assigned function.
+
+        Parses incoming request into a set of args and kwargs.
+        Calls function with those args.
+        Returns an API response, with the result of the function returned as a
+        JSON-encoded object in the response body.
+        """
         args = []
         kwargs = {}
         match = PROXY_PARAM_RE.search(event['resource'])
@@ -86,25 +127,35 @@ def apiproxy(function):
             kwargs.update(event['pathParameters'])
 
         try:
-            result = function(*args, **kwargs)
+            result = self.function(*args, **kwargs)
         except APIError as err:
-            return _api_response(err.status_code, {'message': err.message})
+            return self._api_response(err.status_code, {'message': err.message})
         except Exception:
-            log.exception('Error executing %s', function)
-            return _api_response(500, {'message': SERVER_ERROR_MSG + traceback.format_exc()})
+            log.exception('Error executing %s', self.function)
+            return self._api_response(500, {'message': SERVER_ERROR_MSG + traceback.format_exc()})
 
-        return _api_response(200, result)
+        return self._api_response(200, result)
 
-    return proxy
+    @staticmethod
+    def _api_response(code, obj):
+        return {
+            'statusCode': code,
+            'headers': {'Content-Type': 'application/json'},
+            'body': json.dumps(obj),
+        }
 
 
-@apiproxy
+# AWS Lambda requires reference to a single function at module level
+dispatch = apiproxy.dispatch
+
+
+@apiproxy.route('/version')
 def version():
     """Report the current API version."""
     return {'version': __version__}
 
 
-@apiproxy
+@apiproxy.route('/3/vend', '/2/vend')
 def vend(requirements, rebuild=False, minimal=False, bucketname=BUCKET):
     """Vend takes a package name and builds python wheels for it and its dependencies."""
     keys = clone_packages(requirements, bucketname, overwrite=rebuild)
