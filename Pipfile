@@ -12,11 +12,16 @@ packaging = "*"
 requests = "*"
 six = "*"
 
+### Test packages ###
+# Used by setup.py check
+docutils = "*"
+pytest = "*"
+# pytest conditional dependency, not picked up for some reason
+funcsigs = { markers = "python_version<'3.0'" }
+pytest-cov = "*"
+
 
 [dev-packages]
 
-docutils = "*"
-pytest = "*"
-pytest-cov = "*"
 wheel = "*"
 twine = "*"
