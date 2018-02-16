@@ -16,7 +16,8 @@ six = "*"
 # Used by setup.py check
 docutils = "*"
 pytest = "*"
-# pytest conditional dependency, not picked up for some reason
+# pytest conditional dependency
+# not picked up if Pipfile.lock is created using python3
 funcsigs = { markers = "python_version<'3.0'" }
 pytest-cov = "*"
 
