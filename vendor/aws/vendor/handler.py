@@ -274,7 +274,11 @@ class PackageInfo(object):
         for rgx in (cls.src_re, cls.whl_re):
             match = rgx.match(filename)
             if match:
-                return cls(**match.groupdict())
+                kw = match.groupdict()
+                # Reverse - to _ conversion for filenames.
+                kw['distribution'] = kw['distribution'].replace('_', '-')
+                kw['version'] = kw['version'].replace('_', '-')
+                return cls(**kw)
 
         raise ParseError('Unable to parse filename: ' + filename)
 
