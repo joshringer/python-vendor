@@ -158,14 +158,15 @@ def version():
 @apiproxy.route('/3/vend', '/2/vend')
 def vend(requirements, rebuild=False, minimal=False, bucketname=BUCKET):
     """Vend takes a package name and builds python wheels for it and its dependencies."""
-    keys = clone_packages(requirements, bucketname, overwrite=rebuild)
-    for key in keys:
-        fname = key.rsplit('/', 1)[-1]
-        # We assume successful parse as it happened in clone_packages already.
-        pi = PackageInfo.parse(fname)
-        if pi.is_src():
-            # TODO: Check for wheel, only overwrite if rebuild==True.
-            build_wheel(key, sys.version_info, bucketname=bucketname)
+    keys = []
+    with download_packages(requirements) as packagepaths:
+        for filepath in packagepaths:
+            artifact = PackageArtifact(filepath)
+            key = upload_artifact(artifact, bucketname, overwrite=rebuild)
+            keys.append(key)
+            if artifact.info.is_src():
+                # TODO: Check for wheel, only overwrite if rebuild==True.
+                build_wheel(key, sys.version_info, bucketname=bucketname)
 
     bucket_url = 'https://{bucketname}.s3.amazonaws.com/'.format(bucketname=bucketname)
     return {
@@ -205,8 +206,9 @@ def build_wheel(src_key, python_version, bucketname=BUCKET):
     ec2.create_instances(**launch_params)
 
 
-def clone_packages(requirements, bucketname=BUCKET, overwrite=False):
-    """Download packages from pypi, then upload to S3 bucket."""
+@contextlib.contextmanager
+def download_packages(requirements):
+    """Download packages from pypi into temp folder."""
     rlist = requirements.split() if hasattr(requirements, 'split') else requirements
     cdir = os.path.abspath('/tmp/pipcache')
     try:  # exist_ok=True not available in Python 2.7
@@ -216,37 +218,24 @@ def clone_packages(requirements, bucketname=BUCKET, overwrite=False):
 
     with tempdir() as wdir:
         subprocess.check_call(['pip', 'download', '--cache-dir', cdir] + rlist, cwd=wdir)
-        return upload_artifacts(wdir, bucketname)
+        yield [os.path.join(wdir, fname) for fname in os.listdir(wdir)]
 
 
-def upload_artifacts(dirpath, bucketname=BUCKET, overwrite=False):
-    """Upload a directory of artifacts to S3 bucket."""
-    keys = set()
-    # TODO: Potentially run in parallel?
-    for fname in os.listdir(dirpath):
-        fpath = os.path.join(dirpath, fname)
-        key = upload_artifact(fpath, bucketname, overwrite=overwrite)
-        keys.add(key)
-
-    return keys
-
-
-def upload_artifact(filepath, bucketname=BUCKET, overwrite=False):
+def upload_artifact(artifact, bucketname=BUCKET, overwrite=False):
     """Upload a package artifact to S3 bucket."""
-    filename = os.path.basename(filepath)
-    key = '{pkg.distribution}/{filename}'.format(
-        pkg=PackageInfo.parse(filename),
-        filename=filename,
+    key = '{info.distribution}/{filename}'.format(
+        info=artifact.info,
+        filename=artifact.filename,
     )
     s3 = boto3.resource('s3')
     obj = s3.Object(bucketname, key)
     if overwrite:
-        obj.upload_file(filepath)
+        obj.upload_file(artifact.filepath)
     else:
         try:
             obj.load()
         except s3.meta.client.exceptions.ClientError:
-            obj.upload_file(filepath)
+            obj.upload_file(artifact.filepath)
 
     return key
 
@@ -300,6 +289,17 @@ class PackageInfo(object):
 
 class ParseError(ValueError):
     """Error raised when unable to parse a string."""
+
+
+class PackageArtifact(object):
+    """Class representing an individual artifact for a Python package."""
+
+    def __init__(self, filepath):
+        """Create artifact, extracting information from filepath."""
+        self.filepath = filepath
+        # Keep because they're used frequently
+        self.dirname, self.filename = os.path.split(filepath)
+        self.info = PackageInfo.parse(self.filename)
 
 
 @contextlib.contextmanager
